@@ -4,10 +4,8 @@ import customtkinter
 import os
 from tkinter import filedialog
 from tkinter import messagebox
-from tkinter import StringVar
 import pickle
 import bz2
-
 
 # Path setup for resources based on execution context
 if getattr(sys, 'frozen', False):
@@ -66,10 +64,9 @@ class App(customtkinter.CTk):
     def __init__(self):
         super().__init__()
         self.title("IAT-Tracer Configuration")
-        self.geometry("800x700")  # Increased height to accommodate new frames
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
-        self.rowconfigure(3, weight=1)
+        self.geometry("800x700")  # Adjusted height to fit the new layout
+        self.columnconfigure((0, 1), weight=1)
+        self.rowconfigure((0, 1, 2, 3, 4, 5), weight=1)
 
         # Variables
         self.imports = {}
@@ -90,42 +87,22 @@ class App(customtkinter.CTk):
         )
         self.choose_button.grid(row=0, column=0, padx=10, pady=10, sticky="w")
 
-        # Import search box with placeholder
-        self.imported_text_filter = StringVar()  # Correct initialization
-        self.imported_search_box = customtkinter.CTkEntry(
-            self,
-            textvariable=self.imported_text_filter,
-            placeholder_text="Filter Imports",  # Placeholder text
-        )
-        self.imported_search_box.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
-        self.imported_search_box.bind("<KeyRelease>", self.filter_imported_button_callback)
-
-        # Settings search box with placeholder
-        self.settings_text_filter = StringVar()  # Correct initialization
-        self.settings_search_box = customtkinter.CTkEntry(
-            self,
-            textvariable=self.settings_text_filter,
-            placeholder_text="Filter Settings",  # Placeholder text
-        )
-        self.settings_search_box.grid(row=1, column=1, padx=10, pady=10, sticky="ew")
-        self.settings_search_box.bind("<KeyRelease>", self.filter_settings_button_callback)
-
         # Custom titles
         self.imported_title = customtkinter.CTkLabel(
             self, text="WINAPI to monitor", font=("Arial", 14, "bold")
         )
-        self.imported_title.grid(row=2, column=0, padx=10, pady=(10, 0), sticky="n")
+        self.imported_title.grid(row=1, column=0, padx=10, pady=(10, 0), sticky="n")
 
         self.settings_title = customtkinter.CTkLabel(
             self, text="Pintool additional settings", font=("Arial", 14, "bold")
         )
-        self.settings_title.grid(row=2, column=1, padx=10, pady=(10, 0), sticky="n")
+        self.settings_title.grid(row=1, column=1, padx=10, pady=(10, 0), sticky="n")
 
         # Scrollable frames for imports and settings
         self.imported_scrollable_checkbox_frame = ScrollableCheckBoxFrame(
             master=self, item_list=[], command=self.log_imported_choice_user_event, height=300
         )
-        self.imported_scrollable_checkbox_frame.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
+        self.imported_scrollable_checkbox_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
         self.settings_scrollable_checkbox_frame = ScrollableCheckBoxFrame(
             master=self,
@@ -133,60 +110,54 @@ class App(customtkinter.CTk):
             command=self.log_settings_choice_user_event,
             height=300,
         )
-        self.settings_scrollable_checkbox_frame.grid(row=3, column=1, padx=10, pady=10, sticky="nsew")
+        self.settings_scrollable_checkbox_frame.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
 
-        # Frame for DELAY_MINIMUM_VALUE
-        self.delay_frame = customtkinter.CTkFrame(self)
-        self.delay_frame.grid(row=4, column=1, padx=10, pady=10, sticky="ew")
-
-        self.delay_label = customtkinter.CTkLabel(
-            self.delay_frame, text="DELAY_MINIMUM_VALUE (seconds):"
+        # Filter boxes below the scrollable frames
+        self.imported_search_box = customtkinter.CTkEntry(
+            self,
+            placeholder_text="Filter Imports",  # Placeholder text
         )
-        self.delay_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.imported_search_box.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
+        self.imported_search_box.bind("<KeyRelease>", self.filter_imported_button_callback)
 
-        self.delay_entry = customtkinter.CTkEntry(self.delay_frame, width=100)
-        self.delay_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-
-        # Frame for RDTSC_DISTANCE and RDTSC_AVG_VALUE
-        self.rdtsc_frame = customtkinter.CTkFrame(self)
-        self.rdtsc_frame.grid(row=5, column=1, padx=10, pady=10, sticky="ew")
-
-        self.rdtsc_distance_label = customtkinter.CTkLabel(
-            self.rdtsc_frame, text="RDTSC_DISTANCE:"
+        self.settings_search_box = customtkinter.CTkEntry(
+            self,
+            placeholder_text="Filter Settings",  # Placeholder text
         )
-        self.rdtsc_distance_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.settings_search_box.grid(row=3, column=1, padx=10, pady=10, sticky="ew")
 
-        self.rdtsc_distance_entry = customtkinter.CTkEntry(self.rdtsc_frame, width=100)
-        self.rdtsc_distance_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        # Configurations arranged in a 3x2 grid
+        self.config_frame = customtkinter.CTkFrame(self)
+        self.config_frame.grid(row=4, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.config_frame.columnconfigure((0, 1, 2), weight=1)
 
-        self.rdtsc_avg_label = customtkinter.CTkLabel(
-            self.rdtsc_frame, text="RDTSC_AVG_VALUE:"
-        )
-        self.rdtsc_avg_label.grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        # Configuration inputs
+        self.add_config_item("DELAY_MINIMUM_VALUE (seconds)", "60", 0, 0)
+        self.add_config_item("RDTSC_DISTANCE ", "50", 0, 1)
+        self.add_config_item("RDTSC_AVG_VALUE ", "20", 1, 0)
+        self.add_config_item("Number of Processors :", "8", 1, 1)
+        self.add_config_item("HARD_DISK_SIZE (GB)", "200", 2, 0)
+        self.add_config_item("RAM_SIZE (GB)", "4", 2, 1)
 
-        self.rdtsc_avg_entry = customtkinter.CTkEntry(self.rdtsc_frame, width=100)
-        self.rdtsc_avg_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
-
-        # Frame for Number of Processors
-        self.processors_frame = customtkinter.CTkFrame(self)
-        self.processors_frame.grid(row=6, column=1, padx=10, pady=10, sticky="ew")
-
-        self.processors_label = customtkinter.CTkLabel(
-            self.processors_frame, text="Number of Processors:"
-        )
-        self.processors_label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
-
-        self.processors_entry = customtkinter.CTkEntry(self.processors_frame, width=100)
-        self.processors_entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
-
-        # Centered Save Button
+        # Save button at the bottom, centered
         self.save_button = customtkinter.CTkButton(
             self, text="Save", command=self.save_button_callback
         )
-        self.save_button.grid(row=7, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.save_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
         # Load API database
         self.load_api_db()
+
+    def add_config_item(self, label_text, default_value, row, col):
+        """Helper function to add a configuration item to the config_frame."""
+        label = customtkinter.CTkLabel(self.config_frame, text=label_text)
+        label.grid(row=row, column=col * 2, padx=5, pady=5, sticky="w")
+
+        entry = customtkinter.CTkEntry(self.config_frame, width=100)
+        entry.grid(row=row, column=col * 2 + 1, padx=5, pady=5, sticky="ew")
+        entry.insert(0, default_value)
+        setattr(self, f"{label_text.split()[0].lower()}_entry", entry)
+
 
     def resource_path(self, relative_path):
         base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
@@ -230,7 +201,7 @@ class App(customtkinter.CTk):
             command=self.log_imported_choice_user_event,
             height=300,
         )
-        self.imported_scrollable_checkbox_frame.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
+        self.imported_scrollable_checkbox_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
     def update_settings_list(self, filter_text=""):
         filtered_settings = [
@@ -288,7 +259,7 @@ class App(customtkinter.CTk):
                     config_file.write(f"#define {setting} false\n")
 
             # Save Delay minimum value (convert seconds to milliseconds)
-            delay_value = self.delay_entry.get()
+            delay_value = self.delay_minimum_value_entry.get()
             if delay_value:
                 try:
                     delay_ms = int(float(delay_value) * 1000)
@@ -301,21 +272,31 @@ class App(customtkinter.CTk):
             if rdtsc_distance:
                 config_file.write(f"#define RDTSC_DISTANCE {rdtsc_distance}\n")
 
-            rdtsc_avg = self.rdtsc_avg_entry.get()
+            rdtsc_avg = self.rdtsc_avg_value_entry.get()
             if rdtsc_avg:
                 config_file.write(f"#define RDTSC_AVG_VALUE {rdtsc_avg}\n")
 
             # Save Number of Processors
-            processors = self.processors_entry.get()
+            processors = self.number_entry.get()
             if processors:
                 config_file.write(f"#define NUMBER_OF_PROCESSORS {processors}\n")
+
+            # Save Ram Size
+            ram_size = self.ram_size_entry.get()
+            if ram_size:
+                config_file.write(f"#define RAM_SIZE {ram_size}LL\n")
+
+            # Save Hard Disk Size
+            hard_disk_size = self.hard_disk_size_entry.get()
+            if hard_disk_size:
+                config_file.write(f"#define HARD_DISK_SIZE {hard_disk_size}ULL\n")
 
         messagebox.showinfo("Save", "Settings saved successfully.")
 
 
 if __name__ == "__main__":
     # Set appearance mode and theme
-    customtkinter.set_appearance_mode("System")
+    customtkinter.set_appearance_mode("dark")
     customtkinter.set_default_color_theme("blue")
 
     # Run the application
