@@ -66,7 +66,7 @@ class App(customtkinter.CTk):
         self.title("IAT-Tracer Configuration")
         self.geometry("800x700")  # Adjusted height to fit the new layout
         self.columnconfigure((0, 1), weight=1)
-        self.rowconfigure((0, 1, 2, 3, 4, 5), weight=1)
+        self.rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=1)
 
         # Variables
         self.imports = {}
@@ -139,11 +139,15 @@ class App(customtkinter.CTk):
         self.add_config_item("HARD_DISK_SIZE (GB)", "200", 2, 0)
         self.add_config_item("RAM_SIZE (GB)", "4", 2, 1)
 
+         # Path selection boxes
+        self.add_path_selection("Path to pin.exe", 5, 0, "pin_path")
+        self.add_path_selection("Path to honeypot", 5, 1, "honeypot_path")
+
         # Save button at the bottom, centered
         self.save_button = customtkinter.CTkButton(
             self, text="Save", command=self.save_button_callback
         )
-        self.save_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.save_button.grid(row=6, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
 
         # Load API database
         self.load_api_db()
@@ -158,6 +162,32 @@ class App(customtkinter.CTk):
         entry.insert(0, default_value)
         setattr(self, f"{label_text.split()[0].lower()}_entry", entry)
 
+    def add_path_selection(self, label_text, row, col, attribute_name):
+        """Helper function to add a file path selection box."""
+        frame = customtkinter.CTkFrame(self)
+        frame.grid(row=row, column=col, padx=10, pady=10, sticky="ew")
+        frame.columnconfigure(1, weight=1)
+
+        label = customtkinter.CTkLabel(frame, text=label_text)
+        label.grid(row=0, column=0, padx=5, pady=5, sticky="w")
+
+        entry = customtkinter.CTkEntry(frame)
+        entry.grid(row=0, column=1, padx=5, pady=5, sticky="ew")
+        setattr(self, f"{attribute_name}_entry", entry)
+
+        button = customtkinter.CTkButton(
+            frame, text="Browse", command=lambda: self.select_file_path(entry)
+        )
+        button.grid(row=0, column=2, padx=5, pady=5)
+
+    def select_file_path(self, entry):
+        """Open a file dialog to select a file and update the entry."""
+        filepath = filedialog.askopenfilename(
+            initialdir=os.getcwd(), title="Select a File"
+        )
+        if filepath:
+            entry.delete(0, "end")
+            entry.insert(0, filepath)
 
     def resource_path(self, relative_path):
         base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
@@ -290,6 +320,14 @@ class App(customtkinter.CTk):
             hard_disk_size = self.hard_disk_size_entry.get()
             if hard_disk_size:
                 config_file.write(f"#define HARD_DISK_SIZE {hard_disk_size}ULL\n")
+
+            pin_path = self.pin_path_entry.get()
+            if pin_path:
+                config_file.write(f"#define PIN_PATH \"{pin_path}\"\n")
+
+            honeypot_path = self.honeypot_path_entry.get()
+            if honeypot_path:
+                config_file.write(f"#define HON_EXE_PATH \"{honeypot_path}\"\n")
 
         messagebox.showinfo("Save", "Settings saved successfully.")
 
