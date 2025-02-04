@@ -23,6 +23,141 @@ elif __file__:
 perf_flag = 0
 
 
+class DLLDropdownFrame(customtkinter.CTkScrollableFrame):
+    def __init__(self, master, command=None, **kwargs):
+        super().__init__(master, **kwargs)
+        self.command = command
+        self.dll_frames = {}
+        self.checkboxes = {}
+        self.dll_vars = {}
+        self.grid_columnconfigure(0, weight=1)
+
+    def add_dll_section(self, dll_name: str, apis: list):
+        # Create a frame for this DLL section
+        dll_frame = customtkinter.CTkFrame(self)
+        dll_frame.grid(sticky="ew", padx=5, pady=(2, 0))
+        dll_frame.grid_columnconfigure(1, weight=1)
+        
+        # Create variable for the DLL's master checkbox
+        dll_var = customtkinter.BooleanVar(value=False)
+        self.dll_vars[dll_name] = dll_var
+        
+        # Create the DLL header frame
+        header_frame = customtkinter.CTkFrame(dll_frame, fg_color="transparent")
+        header_frame.grid(row=0, column=0, sticky="ew")
+        header_frame.grid_columnconfigure(2, weight=1)
+        
+        # Add toggle arrow label
+        self.arrow_labels = getattr(self, 'arrow_labels', {})
+        arrow_label = customtkinter.CTkLabel(
+            header_frame,
+            text="▶",  # Unicode down arrow (will be changed to ▶ when collapsed)
+            width=20,
+            anchor="w"
+        )
+        arrow_label.grid(row=0, column=0, padx=(5, 0))
+        self.arrow_labels[dll_name] = arrow_label
+        
+        # Add master checkbox for the DLL
+        dll_checkbox = customtkinter.CTkCheckBox(
+            header_frame,
+            text="",
+            variable=dll_var,
+            command=lambda: self.toggle_dll_apis(dll_name),
+            width=20
+        )
+        dll_checkbox.grid(row=0, column=1, padx=(5, 0))
+        
+        # Add DLL name label
+        dll_label = customtkinter.CTkLabel(
+            header_frame,
+            text=dll_name,
+            anchor="w",
+            cursor="hand2"  # Changes cursor to hand when hovering
+        )
+        dll_label.grid(row=0, column=2, sticky="ew", padx=5)
+        
+        # Bind click events to both arrow and label
+        arrow_label.bind("<Button-1>", lambda e: self.toggle_api_list(dll_name))
+        dll_label.bind("<Button-1>", lambda e: self.toggle_api_list(dll_name))
+        
+        # Create a frame for API checkboxes
+        api_frame = customtkinter.CTkFrame(dll_frame, fg_color="transparent")
+        api_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
+        api_frame.grid_remove()  # Hidden by default
+        
+        # Add API checkboxes
+        self.checkboxes[dll_name] = {}
+        for i, api in enumerate(apis):
+            var = customtkinter.BooleanVar(value=False)
+            checkbox = customtkinter.CTkCheckBox(
+                api_frame,
+                text=api,
+                variable=var,
+                command=lambda api_name=api: self.on_api_toggle(dll_name, api_name)
+            )
+            checkbox.grid(row=i, column=0, sticky="w", padx=(45, 5), pady=2)  # Increased left padding for indentation
+            self.checkboxes[dll_name][api] = var
+            
+        self.dll_frames[dll_name] = {
+            'main_frame': dll_frame,
+            'api_frame': api_frame,
+            'is_expanded': False
+        }
+
+    def toggle_api_list(self, dll_name: str):
+        frame_info = self.dll_frames[dll_name]
+        if frame_info['is_expanded']:
+            frame_info['api_frame'].grid_remove()
+            self.arrow_labels[dll_name].configure(text="▶")  # Right arrow when collapsed
+        else:
+            frame_info['api_frame'].grid()
+            self.arrow_labels[dll_name].configure(text="▼")  # Down arrow when expanded
+        frame_info['is_expanded'] = not frame_info['is_expanded']
+
+    def toggle_dll_apis(self, dll_name: str):
+        global perf_flag
+        perf_flag = 1
+        state = self.dll_vars[dll_name].get()
+        for api, var in self.checkboxes[dll_name].items():
+            var.set(state)
+            if self.command and not perf_flag:
+                self.command(api)
+        perf_flag = 0
+
+    def on_api_toggle(self, dll_name: str, api_name: str):
+        if self.command and not perf_flag:
+            self.command(api_name)
+        self.update_dll_state(dll_name)
+
+    def update_dll_state(self, dll_name: str):
+        api_states = [var.get() for var in self.checkboxes[dll_name].values()]
+        self.dll_vars[dll_name].set(all(api_states))
+
+    def get_checked_items(self):
+        checked_items = []
+        for dll_name, apis in self.checkboxes.items():
+            for api, var in apis.items():
+                if var.get():
+                    checked_items.append(api)
+        return checked_items
+
+    def select_all(self):
+        global perf_flag
+        perf_flag = 1
+        for dll_name in self.dll_vars:
+            self.dll_vars[dll_name].set(True)
+            self.toggle_dll_apis(dll_name)
+        perf_flag = 0
+
+    def deselect_all(self):
+        global perf_flag
+        perf_flag = 1
+        for dll_name in self.dll_vars:
+            self.dll_vars[dll_name].set(False)
+            self.toggle_dll_apis(dll_name)
+        perf_flag = 0
+
 class ScrollableCheckBoxFrame(customtkinter.CTkScrollableFrame):
     def __init__(self, master, item_list, command=None, **kwargs):
         super().__init__(master, **kwargs)
@@ -208,31 +343,60 @@ class App(customtkinter.CTk):
 
     def load_imports_from_file(self, filename):
         self.imports.clear()
+        dll_apis = {}
         pe = pefile.PE(filename)
+        
+        # Group APIs by DLL
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
+            dll_name = entry.dll.decode("utf-8").lower().split(".")[0]
+            if dll_name not in dll_apis:
+                dll_apis[dll_name] = []
+                
             for imp in entry.imports:
                 if imp.name:
-                    dll = entry.dll.decode("utf-8").lower().split(".")[0]
-                    name = imp.name.decode("utf-8")
-                    self.imports[name] = dll
+                    api_name = imp.name.decode("utf-8")
+                    dll_apis[dll_name].append(api_name)
+                    self.imports[api_name] = dll_name
+        
+        self.update_imported_list(dll_apis=dll_apis)
 
-        self.update_imported_list()
-
-    def update_imported_list(self, filter_text=""):
-        filtered_imports = [
-            name
-            for name in self.imports.keys()
-            if filter_text.strip().casefold() in name.casefold()
-        ]
-        self.imported_scrollable_checkbox_frame.destroy()
-        self.imported_scrollable_checkbox_frame = ScrollableCheckBoxFrame(
+    def update_imported_list(self, filter_text="", dll_apis=None):
+        if hasattr(self, 'imported_scrollable_checkbox_frame'):
+            self.imported_scrollable_checkbox_frame.destroy()
+        
+        self.imported_scrollable_checkbox_frame = DLLDropdownFrame(
             master=self,
-            item_list=filtered_imports,
             command=self.log_imported_choice_user_event,
-            height=300,
+            height=300
         )
         self.imported_scrollable_checkbox_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
 
+        if dll_apis:
+            # Filter DLLs and APIs if filter_text is provided
+            if filter_text:
+                filtered_dll_apis = {}
+                for dll, apis in dll_apis.items():
+                    filtered_apis = [api for api in apis if filter_text.strip().casefold() in api.casefold()]
+                    if filtered_apis:
+                        filtered_dll_apis[dll] = filtered_apis
+                dll_apis = filtered_dll_apis
+
+            # Add DLL sections with their APIs
+            for dll_name, apis in dll_apis.items():
+                self.imported_scrollable_checkbox_frame.add_dll_section(dll_name, apis)
+
+    def filter_imported_button_callback(self, event=None):
+        # Reconstruct dll_apis from self.imports for filtering
+        dll_apis = {}
+        for api, dll in self.imports.items():
+            if dll not in dll_apis:
+                dll_apis[dll] = []
+            dll_apis[dll].append(api)
+        
+        self.update_imported_list(
+            filter_text=self.imported_search_box.get(),
+            dll_apis=dll_apis
+        )
     def update_settings_list(self, filter_text=""):
         filtered_settings = [
             name
@@ -341,3 +505,4 @@ if __name__ == "__main__":
     app = App()
     app.iconbitmap(app.resource_path(icon_file))
     app.mainloop()
+
