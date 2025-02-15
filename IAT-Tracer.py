@@ -316,6 +316,7 @@ class App(customtkinter.CTk):
         self.add_config_item("Stack depth level", "10", 3, 0)
         self.add_config_item("Driver name", "rognoni.sys", 3, 1)
         self.add_config_item("NIC name", "Intel(R) Ethernet Connection I217-LM", 4, 0)
+        self.add_config_item("User name", "DwightSchrute", 4, 1)
         self.add_config_item("Time elapsed from boot (%H:%M:%S)", "07:07:00", 5, 0)
         self.add_config_item("Delta time", "5", 5, 1)
 
@@ -340,12 +341,7 @@ class App(customtkinter.CTk):
         label.grid(row=row, column=col * 2, padx=5, pady=5, sticky="w")
 
         entry = customtkinter.CTkEntry(self.config_frame, width=100)
-        if row == 4:
-            entry.grid(
-                row=row, column=col * 2 + 1, padx=5, pady=5, columnspan=2, sticky="ew"
-            )
-        else:
-            entry.grid(row=row, column=col * 2 + 1, padx=5, pady=5, sticky="ew")
+        entry.grid(row=row, column=col * 2 + 1, padx=5, pady=5, sticky="ew")
         entry.insert(0, default_value)
         attr_name = (
             label_text.split("(")[0].strip().lower().replace(" ", "_").replace(":", "")
