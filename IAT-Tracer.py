@@ -233,13 +233,17 @@ class App(customtkinter.CTk):
         self.loaded_functions = {}
         self.clicked_imported_api_functions = set()
         self.clicked_settings_options = set()
-        self.settings_options = [
-            "CPUID_MITIGATION",
-            "NUMBEROFPROCESSOR_MITIGATION",
-            "GETTICKCOUNT_MITIGATION",
-            "MOUSEMOVEMENT_MITIGATION",
-            "INSTRUCTION_LEVEL_TRACE",
-        ]
+        self.settings_options = {
+            "Instruction level Trace": "INST_TRACE",
+            "CPUID Mitigation": "CPUID_MITIGATION",
+            "Stalling Mitigation": "STALLING_MITIGATION",
+            "Timing Mitigation": "TIMING_MITIGATION",
+            "Hide Human Interaction": "HIDE_HUMAN_INTERACTION",
+            "Hide Number of Processors": "HIDE_NUM_PROCESSORS",
+            "Hide Registry": "HIDE_REGISTRY",
+            "Hide Processes": "HIDE_PROCESSES",
+            "Hide Drivers": "HIDE_DRIVERS",
+        }
 
         # UI Widgets
         self.choose_button = customtkinter.CTkButton(
@@ -271,7 +275,7 @@ class App(customtkinter.CTk):
 
         self.settings_scrollable_checkbox_frame = ScrollableCheckBoxFrame(
             master=self,
-            item_list=self.settings_options,
+            item_list=list(self.settings_options.keys()),
             command=self.log_settings_choice_user_event,
             height=300,
         )
@@ -523,18 +527,24 @@ class App(customtkinter.CTk):
         with open("config.h", "w", encoding="utf-8") as config_file:
             config_file.write("// Auto-generated configuration file\n\n")
 
+            max_define_length = max(
+                max(len(define_name) for define_name in self.settings_options.keys()),
+                max(len(define_name) for define_name in defines.keys()),
+            )
             # Save settings checkboxes
-            for setting in self.settings_options:
-                if setting in self.clicked_settings_options:
-                    config_file.write(f"#define {setting} true\n")
-                else:
-                    config_file.write(f"#define {setting} false\n")
+            for setting_name, macro_name in self.settings_options.items():
+                value = (
+                    "true" if setting_name in self.clicked_settings_options else "false"
+                )
+                padding = " " * (max_define_length - len(macro_name))
+                config_file.write(f"#define {macro_name}{padding} {value}\n")
 
             for key, value_func in defines.items():
                 try:
                     value = value_func()
                     formatted_value = format_define_value(key, value)
-                    config_file.write(f"#define {key} {formatted_value}\n")
+                    padding = " " * (max_define_length - len(key))
+                    config_file.write(f"#define {key}{padding} {formatted_value}\n")
                 except (ValueError, AttributeError) as e:
                     print(f"Error processing {key}: {str(e)}")
                     continue
