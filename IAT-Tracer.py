@@ -2,13 +2,14 @@ import pefile
 import sys
 import customtkinter
 import os
+from datetime import datetime
 from tkinter import filedialog
 from tkinter import messagebox
 import pickle
 import bz2
 
 # Path setup for resources based on execution context
-if getattr(sys, 'frozen', False):
+if getattr(sys, "frozen", False):
     apidb_file = r"apidb.pickle"
     icon_file = r"iat-tracer.ico"
     application_path = os.path.dirname(sys.executable)
@@ -19,8 +20,38 @@ elif __file__:
     icon_file = r"assets/iat-tracer.ico"
     params_file = "params.txt"
 
-# Flag to handle performance optimizations during mass selection/deselection
-perf_flag = 0
+
+def parse_time_to_milliseconds(time_str):
+    """Convert time string in HH:MM:SS format to milliseconds."""
+    try:
+        time_obj = datetime.strptime(time_str, "%H:%M:%S")
+        milliseconds = (
+            time_obj.hour * 3600 + time_obj.minute * 60 + time_obj.second
+        ) * 1000
+        return milliseconds
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid time format. Expected HH:MM:SS, got {time_str}"
+        ) from e
+
+
+def format_define_value(key, value):
+    """Format value based on key type for #define statements."""
+    key = key.upper()
+    if isinstance(value, str):
+        if any(key.endswith(suffix) for suffix in ["_PATH", "_NAME"]):
+            return (
+                f'L"{value}"'
+                if key.startswith("W_") or key.startswith("FAKE_")
+                else f'"{value}"'
+            )
+        try:
+            # Try to convert to number if it's not clearly a string identifier
+            float(value)
+            return value
+        except ValueError:
+            return f'"{value}"'
+    return str(value)
 
 
 class DLLDropdownFrame(customtkinter.CTkScrollableFrame):
@@ -37,55 +68,55 @@ class DLLDropdownFrame(customtkinter.CTkScrollableFrame):
         dll_frame = customtkinter.CTkFrame(self)
         dll_frame.grid(sticky="ew", padx=5, pady=(2, 0))
         dll_frame.grid_columnconfigure(1, weight=1)
-        
+
         # Create variable for the DLL's master checkbox
         dll_var = customtkinter.BooleanVar(value=False)
         self.dll_vars[dll_name] = dll_var
-        
+
         # Create the DLL header frame
         header_frame = customtkinter.CTkFrame(dll_frame, fg_color="transparent")
         header_frame.grid(row=0, column=0, sticky="ew")
         header_frame.grid_columnconfigure(2, weight=1)
-        
+
         # Add toggle arrow label
-        self.arrow_labels = getattr(self, 'arrow_labels', {})
+        self.arrow_labels = getattr(self, "arrow_labels", {})
         arrow_label = customtkinter.CTkLabel(
             header_frame,
             text="▶",  # Unicode down arrow (will be changed to ▶ when collapsed)
             width=20,
-            anchor="w"
+            anchor="w",
         )
         arrow_label.grid(row=0, column=0, padx=(5, 0))
         self.arrow_labels[dll_name] = arrow_label
-        
+
         # Add master checkbox for the DLL
         dll_checkbox = customtkinter.CTkCheckBox(
             header_frame,
             text="",
             variable=dll_var,
             command=lambda: self.toggle_dll_apis(dll_name),
-            width=20
+            width=20,
         )
         dll_checkbox.grid(row=0, column=1, padx=(5, 0))
-        
+
         # Add DLL name label
         dll_label = customtkinter.CTkLabel(
             header_frame,
             text=dll_name,
             anchor="w",
-            cursor="hand2"  # Changes cursor to hand when hovering
+            cursor="hand2",  # Changes cursor to hand when hovering
         )
         dll_label.grid(row=0, column=2, sticky="ew", padx=5)
-        
+
         # Bind click events to both arrow and label
         arrow_label.bind("<Button-1>", lambda e: self.toggle_api_list(dll_name))
         dll_label.bind("<Button-1>", lambda e: self.toggle_api_list(dll_name))
-        
+
         # Create a frame for API checkboxes
         api_frame = customtkinter.CTkFrame(dll_frame, fg_color="transparent")
         api_frame.grid(row=1, column=0, columnspan=2, sticky="ew")
         api_frame.grid_remove()  # Hidden by default
-        
+
         # Add API checkboxes
         self.checkboxes[dll_name] = {}
         for i, api in enumerate(apis):
@@ -94,39 +125,40 @@ class DLLDropdownFrame(customtkinter.CTkScrollableFrame):
                 api_frame,
                 text=api,
                 variable=var,
-                command=lambda api_name=api: self.on_api_toggle(dll_name, api_name)
+                command=lambda api_name=api: self.on_api_toggle(dll_name, api_name),
             )
-            checkbox.grid(row=i, column=0, sticky="w", padx=(45, 5), pady=2)  # Increased left padding for indentation
+            checkbox.grid(
+                row=i, column=0, sticky="w", padx=(45, 5), pady=2
+            )  # Increased left padding for indentation
             self.checkboxes[dll_name][api] = var
-            
+
         self.dll_frames[dll_name] = {
-            'main_frame': dll_frame,
-            'api_frame': api_frame,
-            'is_expanded': False
+            "main_frame": dll_frame,
+            "api_frame": api_frame,
+            "is_expanded": False,
         }
 
     def toggle_api_list(self, dll_name: str):
         frame_info = self.dll_frames[dll_name]
-        if frame_info['is_expanded']:
-            frame_info['api_frame'].grid_remove()
-            self.arrow_labels[dll_name].configure(text="▶")  # Right arrow when collapsed
+        if frame_info["is_expanded"]:
+            frame_info["api_frame"].grid_remove()
+            self.arrow_labels[dll_name].configure(
+                text="▶"
+            )  # Right arrow when collapsed
         else:
-            frame_info['api_frame'].grid()
+            frame_info["api_frame"].grid()
             self.arrow_labels[dll_name].configure(text="▼")  # Down arrow when expanded
-        frame_info['is_expanded'] = not frame_info['is_expanded']
+        frame_info["is_expanded"] = not frame_info["is_expanded"]
 
     def toggle_dll_apis(self, dll_name: str):
-        global perf_flag
-        perf_flag = 1
         state = self.dll_vars[dll_name].get()
         for api, var in self.checkboxes[dll_name].items():
             var.set(state)
-            if self.command and not perf_flag:
+            if self.command:
                 self.command(api)
-        perf_flag = 0
 
     def on_api_toggle(self, dll_name: str, api_name: str):
-        if self.command and not perf_flag:
+        if self.command:
             self.command(api_name)
         self.update_dll_state(dll_name)
 
@@ -143,20 +175,15 @@ class DLLDropdownFrame(customtkinter.CTkScrollableFrame):
         return checked_items
 
     def select_all(self):
-        global perf_flag
-        perf_flag = 1
         for dll_name in self.dll_vars:
             self.dll_vars[dll_name].set(True)
             self.toggle_dll_apis(dll_name)
-        perf_flag = 0
 
     def deselect_all(self):
-        global perf_flag
-        perf_flag = 1
         for dll_name in self.dll_vars:
             self.dll_vars[dll_name].set(False)
             self.toggle_dll_apis(dll_name)
-        perf_flag = 0
+
 
 class ScrollableCheckBoxFrame(customtkinter.CTkScrollableFrame):
     def __init__(self, master, item_list, command=None, **kwargs):
@@ -175,23 +202,21 @@ class ScrollableCheckBoxFrame(customtkinter.CTkScrollableFrame):
         self.checkbox_list.append(checkbox)
 
     def get_checked_items(self):
-        return [checkbox.cget("text") for checkbox in self.checkbox_list if checkbox.get() == 1]
+        return [
+            checkbox.cget("text")
+            for checkbox in self.checkbox_list
+            if checkbox.get() == 1
+        ]
 
     def select_all(self):
-        global perf_flag
-        perf_flag = 1
         for checkbox in self.checkbox_list:
             if not checkbox.get():
                 checkbox.select()
-        perf_flag = 0
 
     def deselect_all(self):
-        global perf_flag
-        perf_flag = 1
         for checkbox in self.checkbox_list:
             if checkbox.get():
                 checkbox.deselect()
-        perf_flag = 0
 
 
 class App(customtkinter.CTk):
@@ -204,12 +229,12 @@ class App(customtkinter.CTk):
         self.rowconfigure((0, 1, 2, 3, 4, 5, 6), weight=1)
 
         # Variables
-        self.imports = {}
+        self.imports = {}  # Mapping winapi -> dll name
         self.loaded_functions = {}
         self.clicked_imported_api_functions = set()
         self.clicked_settings_options = set()
         self.settings_options = [
-            "CPUID_1_MITIGATION",
+            "CPUID_MITIGATION",
             "NUMBEROFPROCESSOR_MITIGATION",
             "GETTICKCOUNT_MITIGATION",
             "MOUSEMOVEMENT_MITIGATION",
@@ -235,9 +260,14 @@ class App(customtkinter.CTk):
 
         # Scrollable frames for imports and settings
         self.imported_scrollable_checkbox_frame = ScrollableCheckBoxFrame(
-            master=self, item_list=[], command=self.log_imported_choice_user_event, height=300
+            master=self,
+            item_list=[],
+            command=self.log_imported_choice_user_event,
+            height=300,
         )
-        self.imported_scrollable_checkbox_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+        self.imported_scrollable_checkbox_frame.grid(
+            row=2, column=0, padx=10, pady=10, sticky="nsew"
+        )
 
         self.settings_scrollable_checkbox_frame = ScrollableCheckBoxFrame(
             master=self,
@@ -245,7 +275,9 @@ class App(customtkinter.CTk):
             command=self.log_settings_choice_user_event,
             height=300,
         )
-        self.settings_scrollable_checkbox_frame.grid(row=2, column=1, padx=10, pady=10, sticky="nsew")
+        self.settings_scrollable_checkbox_frame.grid(
+            row=2, column=1, padx=10, pady=10, sticky="nsew"
+        )
 
         # Filter boxes below the scrollable frames
         self.imported_search_box = customtkinter.CTkEntry(
@@ -253,7 +285,9 @@ class App(customtkinter.CTk):
             placeholder_text="Filter Imports",  # Placeholder text
         )
         self.imported_search_box.grid(row=3, column=0, padx=10, pady=10, sticky="ew")
-        self.imported_search_box.bind("<KeyRelease>", self.filter_imported_button_callback)
+        self.imported_search_box.bind(
+            "<KeyRelease>", self.filter_imported_button_callback
+        )
 
         self.settings_search_box = customtkinter.CTkEntry(
             self,
@@ -263,18 +297,25 @@ class App(customtkinter.CTk):
 
         # Configurations arranged in a 3x2 grid
         self.config_frame = customtkinter.CTkFrame(self)
-        self.config_frame.grid(row=4, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.config_frame.grid(
+            row=4, column=0, columnspan=3, padx=10, pady=10, sticky="ew"
+        )
         self.config_frame.columnconfigure((0, 1, 2), weight=1)
 
         # Configuration inputs
-        self.add_config_item("DELAY_MINIMUM_VALUE (seconds)", "60", 0, 0)
-        self.add_config_item("RDTSC_DISTANCE ", "50", 0, 1)
-        self.add_config_item("RDTSC_AVG_VALUE ", "20", 1, 0)
-        self.add_config_item("Number of Processors :", "8", 1, 1)
-        self.add_config_item("HARD_DISK_SIZE (GB)", "200", 2, 0)
-        self.add_config_item("RAM_SIZE (GB)", "4", 2, 1)
+        self.add_config_item("Delay minimum value (seconds)", "60", 0, 0)
+        self.add_config_item("RDTSC distance ", "50", 0, 1)
+        self.add_config_item("RDTSC avg value ", "20", 1, 0)
+        self.add_config_item("Number of Processors ", "8", 1, 1)
+        self.add_config_item("Hard disk size (GB)", "200", 2, 0)
+        self.add_config_item("RAM size (GB)", "4", 2, 1)
+        self.add_config_item("Stack depth level", "10", 3, 0)
+        self.add_config_item("Driver name", "rognoni.sys", 3, 1)
+        self.add_config_item("NIC name", "Intel(R) Ethernet Connection I217-LM", 4, 0)
+        self.add_config_item("Time elapsed from boot (%H:%M:%S)", "07:07:00", 5, 0)
+        self.add_config_item("Delta time", "5", 5, 1)
 
-         # Path selection boxes
+        # Path selection boxes
         self.add_path_selection("Path to pin.exe", 5, 0, "pin_path")
         self.add_path_selection("Path to honeypot", 5, 1, "honeypot_path")
 
@@ -282,7 +323,9 @@ class App(customtkinter.CTk):
         self.save_button = customtkinter.CTkButton(
             self, text="Save", command=self.save_button_callback
         )
-        self.save_button.grid(row=6, column=0, columnspan=2, padx=10, pady=10, sticky="ew")
+        self.save_button.grid(
+            row=6, column=0, columnspan=2, padx=10, pady=10, sticky="ew"
+        )
 
         # Load API database
         self.load_api_db()
@@ -293,9 +336,17 @@ class App(customtkinter.CTk):
         label.grid(row=row, column=col * 2, padx=5, pady=5, sticky="w")
 
         entry = customtkinter.CTkEntry(self.config_frame, width=100)
-        entry.grid(row=row, column=col * 2 + 1, padx=5, pady=5, sticky="ew")
+        if row == 4:
+            entry.grid(
+                row=row, column=col * 2 + 1, padx=5, pady=5, columnspan=2, sticky="ew"
+            )
+        else:
+            entry.grid(row=row, column=col * 2 + 1, padx=5, pady=5, sticky="ew")
         entry.insert(0, default_value)
-        setattr(self, f"{label_text.split()[0].lower()}_entry", entry)
+        attr_name = (
+            label_text.split("(")[0].strip().lower().replace(" ", "_").replace(":", "")
+        )
+        setattr(self, f"{attr_name}_entry", entry)
 
     def add_path_selection(self, label_text, row, col, attribute_name):
         """Helper function to add a file path selection box."""
@@ -345,38 +396,42 @@ class App(customtkinter.CTk):
         self.imports.clear()
         dll_apis = {}
         pe = pefile.PE(filename)
-        
+
         # Group APIs by DLL
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
             dll_name = entry.dll.decode("utf-8").lower().split(".")[0]
             if dll_name not in dll_apis:
                 dll_apis[dll_name] = []
-                
+
             for imp in entry.imports:
                 if imp.name:
                     api_name = imp.name.decode("utf-8")
                     dll_apis[dll_name].append(api_name)
                     self.imports[api_name] = dll_name
-        
+
         self.update_imported_list(dll_apis=dll_apis)
 
     def update_imported_list(self, filter_text="", dll_apis=None):
-        if hasattr(self, 'imported_scrollable_checkbox_frame'):
+        if hasattr(self, "imported_scrollable_checkbox_frame"):
             self.imported_scrollable_checkbox_frame.destroy()
-        
+
         self.imported_scrollable_checkbox_frame = DLLDropdownFrame(
-            master=self,
-            command=self.log_imported_choice_user_event,
-            height=300
+            master=self, command=self.log_imported_choice_user_event, height=300
         )
-        self.imported_scrollable_checkbox_frame.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
+        self.imported_scrollable_checkbox_frame.grid(
+            row=2, column=0, padx=10, pady=10, sticky="nsew"
+        )
 
         if dll_apis:
             # Filter DLLs and APIs if filter_text is provided
             if filter_text:
                 filtered_dll_apis = {}
                 for dll, apis in dll_apis.items():
-                    filtered_apis = [api for api in apis if filter_text.strip().casefold() in api.casefold()]
+                    filtered_apis = [
+                        api
+                        for api in apis
+                        if filter_text.strip().casefold() in api.casefold()
+                    ]
                     if filtered_apis:
                         filtered_dll_apis[dll] = filtered_apis
                 dll_apis = filtered_dll_apis
@@ -392,11 +447,11 @@ class App(customtkinter.CTk):
             if dll not in dll_apis:
                 dll_apis[dll] = []
             dll_apis[dll].append(api)
-        
+
         self.update_imported_list(
-            filter_text=self.imported_search_box.get(),
-            dll_apis=dll_apis
+            filter_text=self.imported_search_box.get(), dll_apis=dll_apis
         )
+
     def update_settings_list(self, filter_text=""):
         filtered_settings = [
             name
@@ -410,7 +465,9 @@ class App(customtkinter.CTk):
             command=self.log_settings_choice_user_event,
             height=300,
         )
-        self.settings_scrollable_checkbox_frame.grid(row=3, column=1, padx=10, pady=10, sticky="nsew")
+        self.settings_scrollable_checkbox_frame.grid(
+            row=3, column=1, padx=10, pady=10, sticky="nsew"
+        )
 
     def filter_imported_button_callback(self, event=None):
         self.update_imported_list(self.imported_text_filter.get())
@@ -431,6 +488,27 @@ class App(customtkinter.CTk):
             self.clicked_settings_options.add(item)
 
     def save_button_callback(self):
+        defines = {
+            "DELAY_MINIMUM_VALUE": lambda: int(
+                float(self.delay_minimum_value_entry.get()) * 1000
+            ),
+            "RDTSC_DISTANCE": lambda: int(self.rdtsc_distance_entry.get()),
+            "RDTSC_AVG_VALUE": lambda: int(self.rdtsc_avg_value_entry.get()),
+            "NUMBER_OF_PROCESSORS": lambda: int(self.number_of_processors_entry.get()),
+            "RAM_SIZE": lambda: f"{self.ram_size_entry.get()}LL",
+            "STACK_DEPTH_LVL": lambda: int(self.stack_depth_level_entry.get()),
+            "HARD_DISK_SIZE": lambda: f"{self.hard_disk_size_entry.get()}ULL",
+            "NIC_NAME": lambda: self.nic_name_entry.get(),
+            "DRIVER_NAME": lambda: self.driver_name_entry.get(),
+            "PIN_PATH": lambda: self.pin_path_entry.get(),
+            "W_PIN_PATH": lambda: self.pin_path_entry.get(),
+            "HON_EXE_PATH": lambda: self.honeypot_path_entry.get(),
+            "TIME_FROM_BOOT": lambda: parse_time_to_milliseconds(
+                self.time_elapsed_from_boot_entry.get()
+            ),
+            "DELTA_TIME": lambda: int(self.delta_time_entry.get()),
+        }
+
         # Save the selected API functions to params.txt
         with open(params_file, "w", encoding="utf-8") as file:
             for func in self.clicked_imported_api_functions:
@@ -452,46 +530,14 @@ class App(customtkinter.CTk):
                 else:
                     config_file.write(f"#define {setting} false\n")
 
-            # Save Delay minimum value (convert seconds to milliseconds)
-            delay_value = self.delay_minimum_value_entry.get()
-            if delay_value:
+            for key, value_func in defines.items():
                 try:
-                    delay_ms = int(float(delay_value) * 1000)
-                    config_file.write(f"#define DELAY_MINIMUM_VALUE {delay_ms}\n")
-                except ValueError:
-                    print("Invalid DELAY_MINIMUM_VALUE. Skipping.")
-
-            # Save RDTSC_DISTANCE and RDTSC_AVG_VALUE
-            rdtsc_distance = self.rdtsc_distance_entry.get()
-            if rdtsc_distance:
-                config_file.write(f"#define RDTSC_DISTANCE {rdtsc_distance}\n")
-
-            rdtsc_avg = self.rdtsc_avg_value_entry.get()
-            if rdtsc_avg:
-                config_file.write(f"#define RDTSC_AVG_VALUE {rdtsc_avg}\n")
-
-            # Save Number of Processors
-            processors = self.number_entry.get()
-            if processors:
-                config_file.write(f"#define NUMBER_OF_PROCESSORS {processors}\n")
-
-            # Save Ram Size
-            ram_size = self.ram_size_entry.get()
-            if ram_size:
-                config_file.write(f"#define RAM_SIZE {ram_size}LL\n")
-
-            # Save Hard Disk Size
-            hard_disk_size = self.hard_disk_size_entry.get()
-            if hard_disk_size:
-                config_file.write(f"#define HARD_DISK_SIZE {hard_disk_size}ULL\n")
-
-            pin_path = self.pin_path_entry.get()
-            if pin_path:
-                config_file.write(f"#define PIN_PATH \"{pin_path}\"\n")
-
-            honeypot_path = self.honeypot_path_entry.get()
-            if honeypot_path:
-                config_file.write(f"#define HON_EXE_PATH \"{honeypot_path}\"\n")
+                    value = value_func()
+                    formatted_value = format_define_value(key, value)
+                    config_file.write(f"#define {key} {formatted_value}\n")
+                except (ValueError, AttributeError) as e:
+                    print(f"Error processing {key}: {str(e)}")
+                    continue
 
         messagebox.showinfo("Save", "Settings saved successfully.")
 
@@ -503,6 +549,5 @@ if __name__ == "__main__":
 
     # Run the application
     app = App()
-    app.iconbitmap(app.resource_path(icon_file))
+    # app.iconbitmap(app.resource_path(icon_file))
     app.mainloop()
-
