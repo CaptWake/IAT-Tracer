@@ -39,12 +39,10 @@ def format_define_value(key, value):
     """Format value based on key type for #define statements."""
     key = key.upper()
     if isinstance(value, str):
-        if any(key.endswith(suffix) for suffix in ["_PATH", "_NAME"]):
-            return (
-                f'L"{value}"'
-                if key.startswith("W_") or key.startswith("FAKE_")
-                else f'"{value}"'
-            )
+        if key.startswith("W_"):
+            return f'L"{value}"'
+        else: 
+            return f'"{value}"'
         try:
             # Try to convert to number if it's not clearly a string identifier
             float(value)
@@ -240,9 +238,12 @@ class App(customtkinter.CTk):
             "Timing Mitigation": "TIMING_MITIGATION",
             "Hide Human Interaction": "HIDE_HUMAN_INTERACTION",
             "Hide Number of Processors": "HIDE_NUM_PROCESSORS",
+            "Hide Filesystem": "HIDE_FILESYSTEM",
             "Hide Registry": "HIDE_REGISTRY",
             "Hide Processes": "HIDE_PROCESSES",
             "Hide Drivers": "HIDE_DRIVERS",
+            "Hide Windows": "HIDE_WINDOWS",
+            "Hide Services": "HIDE_SERVICES"
         }
 
         # UI Widgets
@@ -316,9 +317,10 @@ class App(customtkinter.CTk):
         self.add_config_item("Stack depth level", "10", 3, 0)
         self.add_config_item("Driver name", "rognoni.sys", 3, 1)
         self.add_config_item("NIC name", "Intel(R) Ethernet Connection I217-LM", 4, 0)
-        self.add_config_item("User name", "DwightSchrute", 4, 1)
-        self.add_config_item("Time elapsed from boot (%H:%M:%S)", "07:07:00", 5, 0)
-        self.add_config_item("Delta time", "5", 5, 1)
+        self.add_config_item("Username", "DwightSchrute", 4, 1)
+        self.add_config_item("Hostname", "DUNDER-MIFFLIN", 5, 0)
+        self.add_config_item("Time elapsed from boot (%H:%M:%S)", "07:07:00", 5, 1)
+        self.add_config_item("Delta time", "5", 6, 1)
 
         # Path selection boxes
         self.add_path_selection("Path to pin.exe", 5, 0, "pin_path")
@@ -489,25 +491,26 @@ class App(customtkinter.CTk):
 
     def save_button_callback(self):
         defines = {
-            "DELAY_MINIMUM_VALUE": lambda: int(
-                float(self.delay_minimum_value_entry.get()) * 1000
-            ),
-            "RDTSC_DISTANCE": lambda: int(self.rdtsc_distance_entry.get()),
-            "RDTSC_AVG_VALUE": lambda: int(self.rdtsc_avg_value_entry.get()),
-            "NUMBER_OF_PROCESSORS": lambda: int(self.number_of_processors_entry.get()),
-            "RAM_SIZE": lambda: f"{self.ram_size_entry.get()}LL",
-            "STACK_DEPTH_LVL": lambda: int(self.stack_depth_level_entry.get()),
-            "HARD_DISK_SIZE": lambda: f"{self.hard_disk_size_entry.get()}ULL",
-            "NIC_NAME": lambda: self.nic_name_entry.get(),
-            "DRIVER_NAME": lambda: self.driver_name_entry.get(),
-            "PIN_PATH": lambda: self.pin_path_entry.get(),
-            "W_PIN_PATH": lambda: self.pin_path_entry.get(),
-            "HON_EXE_PATH": lambda: self.honeypot_path_entry.get(),
-            "TIME_FROM_BOOT": lambda: parse_time_to_milliseconds(
-                self.time_elapsed_from_boot_entry.get()
-            ),
-            "DELTA_TIME": lambda: int(self.delta_time_entry.get()),
-        }
+                "DELAY_MINIMUM_VALUE": lambda: int(float(self.delay_minimum_value_entry.get()) * 1000),
+                "RDTSC_DISTANCE": lambda: int(self.rdtsc_distance_entry.get()),
+                "RDTSC_AVG_VALUE": lambda: int(self.rdtsc_avg_value_entry.get()),
+                "NUMBER_OF_PROCESSORS": lambda: int(self.number_of_processors_entry.get()),
+                "RAM_SIZE": lambda: f"{self.ram_size_entry.get()}LL",
+                "STACK_DEPTH_LVL": lambda: int(self.stack_depth_level_entry.get()),
+                "HARD_DISK_SIZE": lambda: f"{self.hard_disk_size_entry.get()}ULL",
+                "NIC_NAME": lambda: self.nic_name_entry.get(),
+                "USERNAME": lambda: self.username_entry.get(),   
+                "W_USERNAME": lambda: self.username_entry.get(),   
+                "HOSTNAME": lambda: self.hostname_entry.get(),   
+                "W_HOSTNAME": lambda: self.hostname_entry.get(),   
+                "DRIVER_NAME": lambda: self.driver_name_entry.get(),
+                "W_DRIVER_NAME": lambda: self.driver_name_entry.get(),
+                "PIN_PATH": lambda: self.pin_path_entry.get(),
+                "W_PIN_PATH": lambda: self.pin_path_entry.get(),
+                "HON_EXE_PATH": lambda: self.honeypot_path_entry.get(),
+                "TIME_FROM_BOOT": lambda: parse_time_to_milliseconds(self.time_elapsed_from_boot_entry.get()),
+                "DELTA_TIME": lambda: int(self.delta_time_entry.get()),
+            }
 
         # Save the selected API functions to params.txt
         with open(params_file, "w", encoding="utf-8") as file:
