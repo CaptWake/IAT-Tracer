@@ -41,7 +41,7 @@ def format_define_value(key, value):
     if isinstance(value, str):
         if key.startswith("W_"):
             return f'L"{value}"'
-        else: 
+        else:
             return f'"{value}"'
         try:
             # Try to convert to number if it's not clearly a string identifier
@@ -243,7 +243,8 @@ class App(customtkinter.CTk):
             "Hide Processes": "HIDE_PROCESSES",
             "Hide Drivers": "HIDE_DRIVERS",
             "Hide Windows": "HIDE_WINDOWS",
-            "Hide Services": "HIDE_SERVICES"
+            "Hide Services": "HIDE_SERVICES",
+            "Ransomware Shield": "RANSOMWARE_SHIELD",
         }
 
         # UI Widgets
@@ -491,26 +492,30 @@ class App(customtkinter.CTk):
 
     def save_button_callback(self):
         defines = {
-                "DELAY_MINIMUM_VALUE": lambda: int(float(self.delay_minimum_value_entry.get()) * 1000),
-                "RDTSC_DISTANCE": lambda: int(self.rdtsc_distance_entry.get()),
-                "RDTSC_AVG_VALUE": lambda: int(self.rdtsc_avg_value_entry.get()),
-                "NUMBER_OF_PROCESSORS": lambda: int(self.number_of_processors_entry.get()),
-                "RAM_SIZE": lambda: f"{self.ram_size_entry.get()}LL",
-                "STACK_DEPTH_LVL": lambda: int(self.stack_depth_level_entry.get()),
-                "HARD_DISK_SIZE": lambda: f"{self.hard_disk_size_entry.get()}ULL",
-                "NIC_NAME": lambda: self.nic_name_entry.get(),
-                "USERNAME": lambda: self.username_entry.get(),   
-                "W_USERNAME": lambda: self.username_entry.get(),   
-                "HOSTNAME": lambda: self.hostname_entry.get(),   
-                "W_HOSTNAME": lambda: self.hostname_entry.get(),   
-                "DRIVER_NAME": lambda: self.driver_name_entry.get(),
-                "W_DRIVER_NAME": lambda: self.driver_name_entry.get(),
-                "PIN_PATH": lambda: self.pin_path_entry.get(),
-                "W_PIN_PATH": lambda: self.pin_path_entry.get(),
-                "HON_EXE_PATH": lambda: self.honeypot_path_entry.get(),
-                "TIME_FROM_BOOT": lambda: parse_time_to_milliseconds(self.time_elapsed_from_boot_entry.get()),
-                "DELTA_TIME": lambda: int(self.delta_time_entry.get()),
-            }
+            "DELAY_MINIMUM_VALUE": lambda: int(
+                float(self.delay_minimum_value_entry.get()) * 1000
+            ),
+            "RDTSC_DISTANCE": lambda: int(self.rdtsc_distance_entry.get()),
+            "RDTSC_AVG_VALUE": lambda: int(self.rdtsc_avg_value_entry.get()),
+            "NUMBER_OF_PROCESSORS": lambda: int(self.number_of_processors_entry.get()),
+            "RAM_SIZE": lambda: f"{self.ram_size_entry.get()}LL",
+            "STACK_DEPTH_LVL": lambda: int(self.stack_depth_level_entry.get()),
+            "HARD_DISK_SIZE": lambda: f"{self.hard_disk_size_entry.get()}ULL",
+            "NIC_NAME": lambda: self.nic_name_entry.get(),
+            "USERNAME": lambda: self.username_entry.get(),
+            "W_USERNAME": lambda: self.username_entry.get(),
+            "HOSTNAME": lambda: self.hostname_entry.get(),
+            "W_HOSTNAME": lambda: self.hostname_entry.get(),
+            "DRIVER_NAME": lambda: self.driver_name_entry.get(),
+            "W_DRIVER_NAME": lambda: self.driver_name_entry.get(),
+            "PIN_PATH": lambda: self.pin_path_entry.get(),
+            "W_PIN_PATH": lambda: self.pin_path_entry.get(),
+            "HON_EXE_PATH": lambda: self.honeypot_path_entry.get(),
+            "TIME_FROM_BOOT": lambda: parse_time_to_milliseconds(
+                self.time_elapsed_from_boot_entry.get()
+            ),
+            "DELTA_TIME": lambda: int(self.delta_time_entry.get()),
+        }
 
         # Save the selected API functions to params.txt
         with open(params_file, "w", encoding="utf-8") as file:
